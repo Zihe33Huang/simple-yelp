@@ -8,7 +8,7 @@
 
 ### Verification Code
 
-<img src="images/image-20230713191727650.png" alt="image-20230713191727650" style="zoom:50%;" />
+<img src="images/image-20230713191727650.png" alt="image-20230713191727650" style="zoom:25%;" />
 
 1. When the user submits their phone number, the backend verifies the format of the number. If it's incorrect, the user is **prompted** to re-enter the phone number.
 
@@ -20,7 +20,7 @@
 
 
 
-<img src="images/image-20230713192348519.png" alt="image-20230713192348519" style="zoom:50%;" />
+<img src="images/image-20230713192348519.png" alt="image-20230713192348519" style="zoom:25%;" />
 
 1. User submits the verification code and phone number.  Backend will compare  **code provided by the user**  with **code stored in session.** If not the same, then verification fails. 
 
@@ -33,7 +33,7 @@
 
 ### Login Status 
 
-<img src="images/image-20230713202600997.png" alt="image-20230713202600997" style="zoom:50%;" />
+<img src="images/image-20230713202600997.png" alt="image-20230713202600997" style="zoom:25%;" />
 
 For some requests, check whether the user has logged in or not. 
 
@@ -92,7 +92,7 @@ class Service {
 
 In a distributed system, every Tomcat HTTP server maintains its own copy of session data and by default, these servers do not share sessions. Consider a scenario where we have 3 Tomcat servers - A, B, and C. When a user first sends a login request to server A, and subsequently sends another request to server B, server B lacks the session information of the user. As a result, this request will be intercepted.
 
-<img src="images/image-20230713205059374.png" alt="image-20230713205059374" style="zoom:33%;" />
+<img src="images/image-20230713205059374.png" alt="image-20230713205059374" style="zoom:25%;" />
 
 In the early days, the issue was addressed by using shared sessions among the servers. However, this solution had limitations:
 
