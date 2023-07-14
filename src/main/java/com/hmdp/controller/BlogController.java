@@ -29,7 +29,7 @@ public class BlogController {
 
     @Resource
     private IBlogService blogService;
-    @Resource
+    @Resource(name = IUserService.CURRENT_SERVICE)
     private IUserService userService;
 
     @PostMapping

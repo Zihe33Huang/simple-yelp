@@ -6,6 +6,12 @@
 
 # Login Module in monolith application 
 
+
+
+The implementation of this module is in  
+
+"com/hmdp/controller/OldUserController.java"       "com/hmdp/config/LoginInterceptor.java"
+
 ### Verification Code
 
 <img src="images/image-20230713191727650.png" alt="image-20230713191727650" style="zoom:50%;" />
@@ -105,4 +111,31 @@ Therefore, we've moved to using Redis to replace session handling. With Redis, t
 
 
 
-# Login Module  in Distributed System 
+# Login Module in Distributed System 
+
+### The Design of Key
+
+* For **verification code**,   **key** is "login: phone ::#{phone_num}"    **value** is the generated verification code
+
+  For example,      **key** is   login: phone :07709963123       **value** is  aseqe1
+
+  
+
+* For **user information**,   the key design is more complex 
+
+  If we continue to use phone number as **unique identifier** for an individual user, then each request sent from frontend must include the user's phone number, this is not suitable. 
+
+​       So the better solution is when the user login, backend generates a token for this user,  the token serves as **key** in Redis with the user's information as **value**. .  And then backend would return the token to frontend.  Consequently,  every subsequent/following request sent from the frontend would include this token.  
+
+​       For example,      **key** is    login:token:8939a40d-fbda-4155-b9ae-b9b7be08c446     
+
+​                                 **value** is    {"nickName":"default","icon":"","id":1011}
+
+
+
+
+
+### The problem of interceptor
+
+
+
