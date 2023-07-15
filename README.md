@@ -370,7 +370,7 @@ To prevent a situation: Thread A does not go through whole procedure and the loc
 
 
 
-# Voucher Flash Sale
+# Global Unique ID
 
 
 
@@ -438,6 +438,108 @@ public long nextId(String keyPrefix) {
         long end = System.currentTimeMillis();
         System.out.println("time = " + (end - begin));
     }
+```
+
+
+
+
+
+# Voucher Module 
+
+Many Chinese e-commerce apps often host flash sale events featuring limited-quantity vouchers. These events usually last for just a few minutes. Customers must stay attentive and act fast, as they compete with each other to get these vouchers at the moment the event begins. 
+
+Such events require the system to be capable of handling high levels of concurrency.
+
+
+
+### Easiest Implementation with Race Condition 
+
+
+
+* WorkFlow
+
+<img src="images/image-20230715040139787.png" alt="image-20230715040139787" style="zoom:50%;" />
+
+1. Check if the flash sale event has started or ended. 
+2. Check if the stock is sufficient.
+
+
+
+* Race condition Issues
+
+If we do not control the concurrency,  the **oversold issue** may occur. 
+
+For instance, consider two threads: Thread A and Thread B. Now, let's say there's only one item remaining in the stock. Both threads concurrently check the stock and find that there is one item available. Subsequently, they both proceed to deduct the stock and create a new order. As a result, the single item gets oversold, creating a problem due to this race condition
+
+
+
+### Race Condition Solution 
+
+* Pessimistic Lock
+
+Using `synchronized` or `lock `
+
+* Optimistic Lock
+
+```sql
+Update t_voucher set stock = stock - 1 where id = ? and stock > 0 
+```
+
+
+
+
+
+### Further one step:  One user can only get one voucher
+
+<img src="images/image-20230715043941451.png" alt="image-20230715043941451" style="zoom:50%;" />
+
+In addition to above logic,  after checking the stock,  we still need to check if the user has got the voucher, if so, the user can not create an order again.
+
+
+However, a new issue occurs, still race condition:  Think about concurrency,  a user send multiple requests to get voucher at the same time.  Then multiple threads will query the order and find no order created. Consequently, the user will still get multiple voucher and create multiple orders.
+
+
+
+### Solution 
+
+1. Coarse granularity.   Use `synchronized` when checking if the order exists.            																				 Just pseudo code
+
+```java
+public Result getVoucher() {
+  
+    1. check if the event started or not 
+    2. check if the event ended or not
+    3. check if the stock is sufficient
+    4. createOrder();
+}
+
+
+@Transactional
+public synchronized Result createOrder() {
+    1. check if order exists. Yes: return errors 
+    2. Deduct
+    3. Create Order
+}
+```
+
+However, in this way,  the performance will be very bad, as all requests have to be processed sequentially,  even though they are for different types of vouchers  or  from different user.
+
+
+
+2. Fine Granularity. By analysis we can know that, we should control concurrency at user-level, so we should lock for every user rather then the whole system.
+
+   The key implementation here is we use `intern()` ,  so the String will be got from JVM String Pool, which is unique object.  
+
+```java
+@Transactional
+public Result createOrder() {
+    Long userId = getUserId();
+    synchronized (userId.toString().intern() ){
+    1. check if order exists. Yes: return errors 
+    2. Deduct
+    3. Create Order
+    }
+}
 ```
 
 
