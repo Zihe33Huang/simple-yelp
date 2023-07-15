@@ -21,8 +21,8 @@ import java.time.LocalDateTime;
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("tb_seckill_voucher")
-public class SeckillVoucher implements Serializable {
+@TableName("tb_flash_sale_voucher")
+public class FlashSaleVoucher implements Serializable {
 
     private static final long serialVersionUID = 1L;
 

@@ -18,6 +18,11 @@ public class IdWorkerTest {
     RedisIdWorker redisIdWorker;
 
     @Test
+    void increment() {
+        redisIdWorker.nextId("test");
+    }
+
+    @Test
     void testIdWorker() throws InterruptedException {
         ExecutorService es = Executors.newFixedThreadPool(32);
         CountDownLatch latch = new CountDownLatch(300);

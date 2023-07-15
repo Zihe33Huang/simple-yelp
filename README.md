@@ -544,3 +544,13 @@ public Result createOrder() {
 
 
 
+However,` synchronized` can only be used in **single machine system(centralized system)** instead of **distributed system.**
+
+So for distributed system, we need **distributed lock.**
+
+
+
+# Distributed Lock 
+
+
+

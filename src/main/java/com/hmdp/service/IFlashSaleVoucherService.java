@@ -1,7 +1,7 @@
 package com.hmdp.service;
 
-import com.hmdp.entity.SeckillVoucher;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.hmdp.entity.FlashSaleVoucher;
 
 /**
  * <p>
@@ -11,6 +11,6 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @author 虎哥
  * @since 2022-01-04
  */
-public interface ISeckillVoucherService extends IService<SeckillVoucher> {
+public interface IFlashSaleVoucherService extends IService<FlashSaleVoucher> {
 
 }
