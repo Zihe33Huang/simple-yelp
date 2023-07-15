@@ -14,6 +14,7 @@ The implementation of this module is in
 
 ### Verification Code
 
+<img src="images/image-20230713191727650.png" alt="image-20230713191727650" style="zoom:25%;" />
 
 1. When the user submits their phone number, the backend verifies the format of the number. If it's incorrect, the user is **prompted** to re-enter the phone number.
 
@@ -25,6 +26,7 @@ The implementation of this module is in
 
 
 
+<img src="images/image-20230713192348519.png" alt="image-20230713192348519" style="zoom:25%;" />
 
 1. User submits the verification code and phone number.  Backend will compare  **code provided by the user**  with **code stored in session.** If not the same, then verification fails. 
 
@@ -37,6 +39,7 @@ The implementation of this module is in
 
 ### Login Status 
 
+<img src="images/image-20230713202600997.png" alt="image-20230713202600997" style="zoom:25%;" />
 
 For some requests, check whether the user has logged in or not. 
 
@@ -95,6 +98,7 @@ class Service {
 
 In a distributed system, every Tomcat HTTP server maintains its own copy of session data and by default, these servers do not share sessions. Consider a scenario where we have 3 Tomcat servers - A, B, and C. When a user first sends a login request to server A, and subsequently sends another request to server B, server B lacks the session information of the user. As a result, this request will be intercepted.
 
+<img src="images/image-20230713205059374.png" alt="image-20230713205059374" style="zoom:25%;" />
 
 In the early days, the issue was addressed by using shared sessions among the servers. However, this solution had limitations:
 
@@ -107,7 +111,6 @@ Therefore, we've moved to using Redis to replace session handling. With Redis, t
 
 
 
-<<<<<<< HEAD
 # Login Module in Distributed System 
 
 ### The Design of Key
@@ -136,5 +139,306 @@ Therefore, we've moved to using Redis to replace session handling. With Redis, t
 
 
 
-=======
->>>>>>> 1399c39641170b238cf77fc8946f3b294658cc80
+
+
+
+
+# Query Cache
+
+
+
+### Cache data in Redis
+
+<img src="images/image-20230714025718515.png" alt="image-20230714025718515" style="zoom:50%;" />
+
+1. For each query, the first step is to access the cache for data. If the required data is in the cache, it will be retrieved from the cache and returned
+2. In case of a cache miss, the database will be accessed to check if the data exists. If it does not, a 404 error will be returned.
+3. If the data is found in the database, it will be written into the cache and then returned.
+
+
+
+### The cache update strategy
+
+① Evict data until the memory is full.  We can choose different eviction policy.
+
+② Expire time.  Set TTL for every data
+
+③ Update by hand. 
+
+
+
+For data consistency,  ①  is bad, ② is just-so so, ③  is best. 
+
+
+
+For complexity,  ①  is easy, just let Redis do it.     ②  is just so so, because you need to think about TTL.   ③ is hard, you need to code carefully to prevent bugs.
+
+
+
+**In this project we update cache by hand.**
+
+
+
+### Caching Strategy 
+
+1. Cache  Aside    2. Read/Write through   3. Write back
+
+
+
+* Good to Read
+
+  https://medium.com/@vijaynathv/caching-strategies-and-cache-eviction-policies-768351e25f1f
+
+​       https://www.educative.io/answers/caching-patterns
+
+### specific implementation 
+
+**In this project, we choose cache aside strategy.**
+
+
+
+The key implementation here is 
+
+* Read Operation 
+
+```
+    public Result queryById(Long id) {
+        // 1. access cache
+        String key = RedisConstants.CACHE_SHOP_KEY + id;
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
+        if (StrUtil.isNotBlank(shopJson)) {
+            Shop shop = JSONUtil.toBean(shopJson, Shop.class);
+            return Result.ok(shop);
+        }
+
+        // 2. if data not existing in cache, then access database
+        Shop shop = getById(id);
+        if (shop == null) {
+            return Result.fail("The shop not existing");
+        }
+
+        // 3. put into cache
+        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY + id, JSONUtil.toJsonStr(shop));
+        return Result.ok(shop);
+    }
+```
+
+
+
+* Write Operation 
+
+```
+    public Result update(Shop shop) {
+        if (shop.getId() == null) {
+            return Result.fail("id is null");
+        }
+        // 1. update database
+        updateById(shop);
+
+        // 2. delete associated data in cache
+        stringRedisTemplate.delete(RedisConstants.CACHE_SHOP_KEY + shop.getId());
+
+        return Result.ok();
+    }
+```
+
+
+
+
+
+### ReidsCacheUtil
+
+#### Issue: 1. Cache Penetration
+
+**Scenario**:  if the data requested by client side does **not** exist in both cache and database,   then the cache will never be hit, all the request will be processed by database. 
+
+
+
+ **Solutions:** 
+
+① Cache the data that does not exist
+
+​     Pros:  easy to develop and maintain 
+
+​     Cons: extra memory needed in cache,     data inconsistency in short term 
+
+② Bloom Filter 
+
+​	 Pros: less memory needed in Cache
+
+​     Cons: complex,        false positive 
+
+
+
+#### Issue2:  Cache Avalanche
+
+**Scenario** :    ① A large number of cache keys expire at the same time     ② Redis crashes down
+
+
+
+**Solution**:
+
+① set random value for TTL to avoid all cache keys expire at the same time.
+
+② Using  cluster for Availability.
+
+
+
+
+
+#### Issue3: Hotspot Invalid 
+
+**Scenario**:    In a system with  high concurrency ,  if one hotspot key being invalid suddenly,  then countless requests will be passed to database. 
+
+
+
+**Solution**: 
+
+① Mutex lock.    Think such a scenario,  hundreds of requests are passed into server side,  so here are hundreds of threads.  When thread A access data and gets no data, it will access database,  and put the data into cache.  However, when A is doing this process (have not finished)  ,  thread B, C, D ,E .... will also access the cache, and gets no data,  consequently, hundreds of requests will still access database, which may lead to database crash down. 
+
+To prevent this scenario, we use mutex to limit that only one thread can access database at a time.
+
+To prevent a situation: Thread A does not go through whole procedure and the lock expires,   and then B thread acquire the lock,  but Thread A release the lock owned by Thread B.  Every time to lock, thread should generate a token to identify  the owner of lock.
+
+```java
+ // com/hmdp/utils/CacheClient.java
+ 
+    public <R, ID> R queryWithMutex(String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit timeUnit) {
+        String key = keyPrefix + id;
+        String json = stringRedisTemplate.opsForValue().get(key);
+        if (StrUtil.isNotBlank(json)) {
+            return JSONUtil.toBean(json, type);
+        }
+        if (json.equals("")) {
+            return null;
+        }
+        String lockKey = RedisConstants.LOCK_SHOP_KEY + id;
+        R r = null;
+        String token = RandomUtil.randomString(6);
+        try {
+            boolean flag = tryLock(lockKey, token);
+            // fail to acquire lock, sleep
+            if (!flag) {
+                Thread.sleep(50);
+                return queryWithMutex(keyPrefix, id, type, dbFallback, time, timeUnit);
+            }
+            // get lock
+            r = dbFallback.apply(id);
+            if (r == null) {
+                // set blank value into cache to prevent Cache Penetration
+                stringRedisTemplate.opsForValue().set(key, "", RedisConstants.CACHE_NULL_TTL, TimeUnit.MINUTES);
+                return null;
+            }
+            this.set(key, r, time, timeUnit);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            unlock(lockKey, token);
+        }
+        return r;
+    }
+
+    private boolean tryLock(String key, String value) {
+        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, value, 10, TimeUnit.SECONDS);
+        return flag;
+    }
+
+    private void unlock(String key, String value) {
+        String v = stringRedisTemplate.opsForValue().get(key);
+        if (value.equals(v)) {
+            stringRedisTemplate.delete(key);
+            return;
+        }
+    }
+```
+
+
+
+
+
+② Logical Expiration.
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Voucher Flash Sale
+
+
+
+### Global Unique ID Generator 
+
+* Why we need a **global ID** rather then **auto-increment ID**
+
+1. Database Partitioning:  When using **auto-increment ID** in a database table, a problem can arise if we need to perform **vertical partitioning** on that table. Different sub-tables may end up with conflicting IDs, as each partition would continue the auto-increment sequence independently, potentially leading to duplicates
+2. Using auto-increment IDs for items in our database could  **expose** **sensitive business information.**   For example, a competitor could estimate the total number of items we've sold by simply observing the incrementing IDs.
+
+
+
+### Implementation 
+
+The key implementation is Redis  **increment()** method. 
+
+
+
+```java
+  // com/hmdp/utils/RedisIdWorker.java
+
+public long nextId(String keyPrefix) {
+        // 1. generate timestamp
+        LocalDateTime now = LocalDateTime.now();
+        long nowSecond = now.toEpochSecond(ZoneOffset.UTC);
+        long timestamp = nowSecond - BEGIN_TIMESTAMP;
+
+        // 2. Get today
+        String date = now.format(DateTimeFormatter.ofPattern("yyyy:MM:dd"));
+
+        // 3. auto-increment
+        Long count = stringRedisTemplate.opsForValue().increment("icr:" + keyPrefix + ":" + date);
+
+        return timestamp << COUNT_BITS | count;
+    }
+```
+
+
+
+
+
+### Test
+
+
+
+```java
+  //com/hmdp/IdWorkerTest.java
+
+		@Test
+    void testIdWorker() throws InterruptedException {
+        ExecutorService es = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(300);
+        Runnable task = () -> {
+            for (int i = 0; i < 100; i++) {
+                long id = redisIdWorker.nextId("order");
+                System.out.println("id = " + id);
+            }
+            latch.countDown();
+        };
+        long begin = System.currentTimeMillis();
+        for (int i = 0; i < 300; i++) {
+            es.submit(task);
+        }
+        latch.await();
+        long end = System.currentTimeMillis();
+        System.out.println("time = " + (end - begin));
+    }
+```
+
+
+
